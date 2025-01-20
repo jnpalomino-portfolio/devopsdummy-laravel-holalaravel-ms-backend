@@ -1,35 +1,34 @@
-# Imagen base
-FROM php:8.2-fpm
+FROM --platform=linux/amd64 php:8.2-fpm-alpine
 
-# Instalar dependencias del sistema
-RUN apt-get update && apt-get install -y \
+# Instalar dependencias esenciales
+RUN apk add --no-cache \
     git \
-    unzip \
-    curl \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
     zip \
+    unzip \
+    libpng-dev \
     libzip-dev \
-    && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+    && docker-php-ext-install pdo_mysql bcmath gd zip \
+    && rm -rf /var/cache/apk/*
 
 # Instalar Composer
 COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-# Crear el directorio de trabajo
+# Crear directorio de trabajo
 WORKDIR /app/backend
 
-# Copiar archivos del proyecto
+# Copiar solo los archivos necesarios primero
+COPY composer.json composer.lock ./
+
+# Instalar dependencias de producción
+RUN composer install --no-dev --optimize-autoloader --no-scripts
+
+# Copiar el resto de la aplicación
 COPY . .
 
-# Instalar dependencias
-RUN composer install --no-dev --optimize-autoloader
+# Configurar permisos
+RUN chgrp -R 0 /app
+RUN chmod -R g=u /app
 
-# Permisos para almacenamiento y caché
-RUN chown -R www-data:www-data /app/backend/storage /app/backend/bootstrap/cache
-
-# Exponer el puerto 8008
 EXPOSE 8008
 
-# Comando para ejecutar el servidor Artisan
 CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8008"]
